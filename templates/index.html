@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pink Sticky Notes</title>
+<style>
+:root {
+  --bg: #ffe6ee;
+  --tusti-note: #fff0f5;
+  --tusti-note-complete: #e0d0e0;
+  --vaishnavi-note: #fff5f8;
+  --vaishnavi-note-complete: #e8d8e0;
+  --note-text: #5f5f5f;
+  --border: #f4a3c0;
+}
+* { box-sizing: border-box; }
+body { 
+  margin: 0; 
+  font-family: "Poppins", sans-serif; 
+  background: var(--bg); 
+  height: 100vh; 
+  overflow: hidden; 
+}
+
+.top-bar {
+  padding: 12px;
+  text-align: center;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+.top-bar button {
+  background: #ffb6cf;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 500;
+  color: #8b2c4f;
+  box-shadow: 0 6px 12px rgba(0,0,0,0.12);
+  margin: 0 6px;
+}
+
+.board { display: grid; grid-template-columns: 1fr 1fr; height: calc(100vh - 60px); }
+
+.section {
+  position: relative;
+  border-right: 1px dashed var(--border);
+  padding: 0;
+  overflow: hidden;
+}
+.section:last-child { border-right: none; }
+.section h2 {
+  margin: 0 0 6px 0;
+  font-size: 18px;
+  color: #b03060;
+  text-align: center;
+}
+
+.note {
+  position: absolute;
+  border-radius: 0;
+  box-shadow: 6px 6px 12px rgba(0,0,0,0.2);
+  cursor: grab;
+  padding: 12px;
+}
+
+.note textarea {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: transparent;
+  resize: none;
+  outline: none;
+  font-family: "Poppins", sans-serif;
+  font-size: 11px;
+  font-style: italic;
+  color: var(--note-text);
+  padding: 0;
+  margin: 0;
+}
+
+.note-actions {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  display: flex;
+  gap: 6px;
+}
+
+.note-actions button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  color: #8b2c4f;
+  display: none;
+}
+
+.note:hover .note-actions button { display: inline; }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <button id="addMe">+ Tusti</button>
+  <button id="addFriend">+ Vaishnavi</button>
+</div>
+
+<div class="board">
+  <div class="section" id="me">
+    <h2>Tusti</h2>
+  </div>
+  <div class="section" id="friend">
+    <h2>Vaishnavi</h2>
+  </div>
+</div>
+
+<script>
+const API = "/notes";
+
+window.createNote = function(sectionId) {
+  let sizeInput = prompt("Enter sticky note size (length x width), e.g., 150x180:", "180x180");
+  let width = 180, height = 180;
+
+  if(sizeInput) {
+    const match = sizeInput.trim().match(/^(\d+)x(\d+)$/i);
+    if(match) {
+      width = parseInt(match[1]);
+      height = parseInt(match[2]);
+    } else {
+      alert("Invalid format! Using default 180x180.");
+    }
+  }
+
+  const note = {
+    id: Date.now().toString(),
+    section: sectionId,
+    x: 30,
+    y: 30,
+    width: width,
+    height: height,
+    text: '',
+    complete: false
+  };
+  addNote(note, true);
+};
+
+async function loadNotes() {
+  try {
+    const res = await fetch(API);
+    const notes = await res.json();
+    notes.forEach(n => {
+      if (!document.querySelector(`.note[data-id='${n.id}']`)) addNote(n, false);
+    });
+  } catch(err) { console.error(err); }
+}
+
+async function saveNote(note) {
+  try { await fetch(API, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(note) }); }
+  catch(err){ console.error(err); }
+}
+
+async function deleteNote(id, el){
+  try { await fetch(`${API}/${id}`, {method:'DELETE'}); el.remove(); } catch(err){ console.error(err); }
+}
+
+function addNote(noteData, shouldSave){
+  const section = document.getElementById(noteData.section);
+  if(document.querySelector(`.note[data-id='${noteData.id}']`)) return;
+
+  const note = document.createElement('div');
+  note.className = 'note';
+  note.dataset.id = noteData.id;
+  note.style.left = noteData.x + 'px';
+  note.style.top = noteData.y + 'px';
+  note.style.width = noteData.width + 'px';
+  note.style.height = noteData.height + 'px';
+  const bg = noteData.section === 'me' ? (noteData.complete ? 'var(--tusti-note-complete)' : 'var(--tusti-note)') 
+                                         : (noteData.complete ? 'var(--vaishnavi-note-complete)' : 'var(--vaishnavi-note)');
+  note.style.background = bg;
+
+  note.innerHTML = `
+    <div class="note-actions">
+      <button class="tick">✔</button>
+      <button class="delete">🗑️</button>
+    </div>
+    <textarea placeholder="write something cute…">${noteData.text || ''}</textarea>
+  `;
+  section.appendChild(note);
+  makeDraggable(note);
+
+  const tickBtn = note.querySelector('.tick');
+  tickBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    noteData.complete = !noteData.complete;
+    const bg = noteData.section === 'me' ? (noteData.complete ? 'var(--tusti-note-complete)' : 'var(--tusti-note)') 
+                                         : (noteData.complete ? 'var(--vaishnavi-note-complete)' : 'var(--vaishnavi-note)');
+    note.style.background = bg;
+    saveNote(noteData);
+  });
+
+  note.querySelector('.delete').addEventListener('click', e=>{
+    e.stopPropagation();
+    deleteNote(noteData.id,note);
+  });
+
+  note.querySelector('textarea').addEventListener('input', ()=>{
+    noteData.text = note.querySelector('textarea').value;
+    saveNote(noteData);
+  });
+
+  if(shouldSave) saveNote(noteData);
+}
+
+function makeDraggable(el){
+  let offsetX=0, offsetY=0, isDown=false;
+  el.addEventListener('mousedown', e=>{
+    isDown=true; offsetX=e.offsetX; offsetY=e.offsetY; el.style.cursor='grabbing'; e.stopPropagation();
+  });
+  document.addEventListener('mousemove', e=>{
+    if(!isDown) return;
+    const parent=el.parentElement;
+    el.style.left = (e.pageX - parent.offsetLeft - offsetX) + 'px';
+    el.style.top = (e.pageY - parent.offsetTop - offsetY) + 'px';
+  });
+  document.addEventListener('mouseup', ()=>{
+    if(isDown){
+      const noteData={
+        id:el.dataset.id,
+        section:el.parentElement.id,
+        x:el.offsetLeft,
+        y:el.offsetTop,
+        width: el.offsetWidth,
+        height: el.offsetHeight,
+        text: el.querySelector('textarea').value,
+        complete: el.dataset.complete === 'true' || false
+      };
+      saveNote(noteData);
+    }
+    isDown=false; el.style.cursor='grab';
+  });
+}
+
+// Attach buttons
+document.getElementById('addMe').onclick = ()=>createNote('me');
+document.getElementById('addFriend').onclick = ()=>createNote('friend');
+
+loadNotes();
+setInterval(loadNotes, 3000);
+</script>
+</body>
+</html>
+
