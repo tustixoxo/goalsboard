@@ -185,7 +185,7 @@ function addNote(noteData, shouldSave){
       <button class="tick">✔</button>
       <button class="delete">🗑️</button>
     </div>
-    <textarea placeholder="write something cute…">${noteData.text || ''}</textarea>
+    <textarea placeholder="write here…">${noteData.text || ''}</textarea>
   `;
   section.appendChild(note);
   makeDraggable(note);
@@ -241,8 +241,7 @@ function makeDraggable(el){
     isDown=false; el.style.cursor='grab';
   });
 }
-
-// Attach buttons
+  
 document.getElementById('addMe').onclick = ()=>createNote('me');
 document.getElementById('addFriend').onclick = ()=>createNote('friend');
 
